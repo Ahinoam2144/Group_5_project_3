@@ -1,0 +1,10 @@
+Sample project README statement.
+
+Project 3 Group 5
+
+Team members: Ian Shuman, Kechao Lu, Ahinoam Toubia, Fangtong Mei
+
+Summary: In this project, we enhance pCO₂ modeling in data-sparse regions like the Southern Ocean. We aim to improve the Large Ensemble Testbed (LET) modeling accuracy and reduce pCO₂ reconstructions costs, using Bio Argo masking and SOCAT mirroring techniques.
+
+Contribution Statement:
+Kechao found, uploaded, and cleaned the Bio-Argo data. Kechao also built the Bio-Argo masking for the pCO₂ reconstructions and created figures. Ian and Ahinoam applyed the hemispheric mirroring technique with Ahinoam writing the begining of the mirroring code and Ian building the SOCAT mirroring masking and running the ML reconstruction and plotted the figures. Ahinoam wrote the introduction and the motivation behind the project and togethr with Kechao wrote up the explanations for the figures and the summary in the notebook. All team members contributed to the GitHub repository and prepared the presentation. All team members approve our work presented in our GitHub repository including this contribution statement.
