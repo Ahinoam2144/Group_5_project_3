@@ -328,5 +328,117 @@ def eval_spatial_argo_clim(selected_mems_dict, recon_output_dir, init_date, fin_
     return ds_final
 
 
+def calculate_GCB_statistics_fast_mir(ds_mod, ds_som):
+    # Ensure computations are done (e.g., if using dask)
+    ds_mod = ds_mod.compute()
+    ds_som = ds_som.compute()
+    
+    # Print the shapes of the input variables to confirm dimensions
+    print(f"Shape of ds_mod: ylat={len(ds_mod['ylat'])}, xlon={len(ds_mod['xlon'])}")
+    print(f"Shape of ds_som: ylat={len(ds_som['ylat'])}, xlon={len(ds_som['xlon'])}")
+    
+    # Calculate correlations
+    corr_detrend = correlation(ds_mod['spco2_detrend'].values, ds_som['spco2_detrend'].values, axis=0)
+    corr_dec = correlation(ds_mod['spco2_dec'].values, ds_som['spco2_dec'].values, axis=0)
+    corr_seasonal = correlation(ds_mod['spco2_seasonal'].values, ds_som['spco2_seasonal'].values, axis=0)
+    corr_residual = correlation(ds_mod['spco2_residual'].values, ds_som['spco2_residual'].values, axis=0)
+    corr_residual_low = correlation(ds_mod['spco2_residual_low'].values, ds_som['spco2_residual_low'].values, axis=0)
+    
+    # Transpose the correlation arrays to match the shape (ylat, xlon)
+    corr_detrend = corr_detrend.T
+    corr_dec = corr_dec.T
+    corr_seasonal = corr_seasonal.T
+    corr_residual = corr_residual.T
+    corr_residual_low = corr_residual_low.T
+    
+    # Calculate std_star
+    std_star_all = std_star(ds_mod['spco2'].values, ds_som['spco2'].values, axis=0)
+    std_star_detrend = std_star(ds_mod['spco2_detrend'].values, ds_som['spco2_detrend'].values, axis=0)
+    std_star_dec = std_star(ds_mod['spco2_dec'].values, ds_som['spco2_dec'].values, axis=0)
+    std_star_seasonal = std_star(ds_mod['spco2_seasonal'].values, ds_som['spco2_seasonal'].values, axis=0)
+    std_star_residual = std_star(ds_mod['spco2_residual'].values, ds_som['spco2_residual'].values, axis=0)
+    std_star_residual_low = std_star(ds_mod['spco2_residual_low'].values, ds_som['spco2_residual_low'].values, axis=0)
+
+    # Transpose the std_star arrays as well
+    std_star_all = std_star_all.T
+    std_star_detrend = std_star_detrend.T
+    std_star_dec = std_star_dec.T
+    std_star_seasonal = std_star_seasonal.T
+    std_star_residual = std_star_residual.T
+    std_star_residual_low = std_star_residual_low.T
+
+    
+    # Create the output dataset
+    ds_out = xr.Dataset(
+        {
+            'corr_detrend': (['ylat', 'xlon'], corr_detrend),
+            'corr_dec': (['ylat', 'xlon'], corr_dec),
+            'corr_seasonal': (['ylat', 'xlon'], corr_seasonal),
+            'corr_residual': (['ylat', 'xlon'], corr_residual),
+            'corr_residual_low': (['ylat', 'xlon'], corr_residual_low),
+            'std_star': (['ylat', 'xlon'], std_star_all),
+            'std_star_detrend': (['ylat', 'xlon'], std_star_detrend),
+            'std_star_dec': (['ylat', 'xlon'], std_star_dec),
+            'std_star_seasonal': (['ylat', 'xlon'], std_star_seasonal),
+            'std_star_residual': (['ylat', 'xlon'], std_star_residual),
+            'std_star_residual_low': (['ylat', 'xlon'], std_star_residual_low),
+        },
+        coords={
+            'ylat': (['ylat'], ds_mod['ylat'].values),
+            'xlon': (['xlon'], ds_mod['xlon'].values)
+        }
+    )
+    return ds_out
+
+def mir_eval_spatial(selected_mems_dict, recon_output_dir, init_date, fin_date):
+
+    ds_ens_list = []  
+    for ens, members in selected_mems_dict.items():
+        ds_mem_list = [] 
+        for member in members:
+            print(f"Starting computation for ESM: {ens}, Member: {member}") 
+            recon_dir = f"{recon_output_dir}/{ens}/{member + "_mirrored"}"
+            recon_path = f"{recon_dir}/recon_pCO2residual_{ens}_{member}_mirrored_mon_1x1_{init_date}_{fin_date}.zarr"
+            
+            detrend_recon = decompose_stl_fast_parallel(da=recon_path, var_name="pCO2_recon_unseen")
+            detrend_truth = decompose_stl_fast_parallel(da=recon_path, var_name="pCO2_truth")
+    
+            ds_eval = calculate_GCB_statistics_fast_mir(ds_mod=detrend_truth, ds_som=detrend_recon)
+            ds_eval = ds_eval.expand_dims({"member": [member]})
+            ds_mem_list.append(ds_eval)
+    
+        ds_ens = xr.concat(ds_mem_list, dim="member")
+        ds_ens = ds_ens.expand_dims({"ens": [ens]})
+        ds_ens_list.append(ds_ens)
+    
+    ds_final = xr.concat(ds_ens_list, dim="ens")
+    return ds_final
+
+
+def argo_eval_spatial(selected_mems_dict, recon_output_dir, init_date, fin_date):
+
+    ds_ens_list = []  
+    for ens, members in selected_mems_dict.items():
+        ds_mem_list = [] 
+        for member in members:
+            print(f"Starting computation for ESM: {ens}, Member: {member}") 
+            recon_dir = f"{recon_output_dir}/{ens + "_argo"}/{member}"
+            recon_path = f"{recon_dir}/recon_pCO2_{ens + "_argo"}_{member}_mon_1x1_{init_date}_{fin_date}.zarr"
+            
+            detrend_recon = decompose_stl_fast_parallel(da=recon_path, var_name="pCO2_recon_unseen")
+            detrend_truth = decompose_stl_fast_parallel(da=recon_path, var_name="pCO2_truth")
+    
+            ds_eval = calculate_GCB_statistics_fast(ds_mod=detrend_truth, ds_som=detrend_recon)
+            ds_eval = ds_eval.expand_dims({"member": [member]})
+            ds_mem_list.append(ds_eval)
+    
+        ds_ens = xr.concat(ds_mem_list, dim="member")
+        ds_ens = ds_ens.expand_dims({"ens": [ens]})
+        ds_ens_list.append(ds_ens)
+    
+    ds_final = xr.concat(ds_ens_list, dim="ens")
+    return ds_final
+
+
 
     
